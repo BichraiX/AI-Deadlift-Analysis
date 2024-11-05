@@ -78,7 +78,6 @@ for frame_id, result in enumerate(results):
         for i, label in enumerate(joint_labels):
             x, y = int(keypoints[0][i][0]), int(keypoints[0][i][1])
             joint_data[label] = (x, y)
-            print(x,y)
             # Draw the keypoint on the frame
             cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
         
