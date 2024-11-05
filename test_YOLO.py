@@ -1,50 +1,102 @@
 from ultralytics import YOLO
-import pandas as pd
+import cv2
+import numpy as np
 
 # Load the model
 model = YOLO("models/yolo11n-pose.pt")
 
-# List to store joint position data
-all_joints = []
-
-# Process the video to track keypoints
-results = model.track(source="dataset/Deadlift.mp4", show=True, save=True)
-
-# Define the expected joint labels
+# Define joint labels and the video source
 joint_labels = ["nose", "left_eye", "right_eye", "left_ear", "right_ear",
                 "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
                 "left_wrist", "right_wrist", "left_hip", "right_hip",
                 "left_knee", "right_knee", "left_ankle", "right_ankle"]
 
-# Loop through the results
+video_source = "dataset/example2.mp4"
+
+# Function to calculate angles between three points
+def calculate_angle(p1, p2, p3):
+    if None in (p1, p2, p3) or None in (p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]):
+        return None
+    v1 = np.array([p1[0] - p2[0], p1[1] - p2[1]])
+    v2 = np.array([p3[0] - p2[0], p3[1] - p2[1]])
+    cosine_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    angle = np.degrees(np.arccos(cosine_angle))
+    return angle
+
+# Function to analyze deadlift form and provide feedback
+def check_deadlift_form(joint_data):
+    # Extract coordinates for relevant joints
+    left_shoulder = joint_data.get("left_shoulder", None)
+    left_hip = joint_data.get("left_hip", None)
+    left_knee = joint_data.get("left_knee", None)
+    left_ankle = joint_data.get("left_ankle", None)
+    
+    # Calculate angles
+    hip_angle = calculate_angle(left_shoulder, left_hip, left_knee)
+    knee_angle = calculate_angle(left_hip, left_knee, left_ankle)
+    
+    # Generate feedback only if angles are valid
+    feedback = ""
+    if hip_angle is not None:
+        if 30 <= hip_angle <= 45:
+            feedback += "Good hip angle for starting position.\n"
+        elif hip_angle > 160:
+            feedback += "Good hip angle for lockout.\n"
+        else:
+            feedback += f"Adjust hip angle: {hip_angle:.2f}°\n"
+    else:
+        feedback += "Hip angle data unavailable.\n"
+    
+    if knee_angle is not None:
+        if 70 <= knee_angle <= 90:
+            feedback += "Good knee angle for starting position.\n"
+        elif knee_angle > 160:
+            feedback += "Good knee angle for lockout.\n"
+        else:
+            feedback += f"Adjust knee angle: {knee_angle:.2f}°\n"
+    else:
+        feedback += "Knee angle data unavailable.\n"
+    
+    return feedback
+
+# Process the video and display form feedback
+results = model.track(source=video_source, stream=True)
+
 for frame_id, result in enumerate(results):
-    for person_id, person in enumerate(result.keypoints):  # assuming each `result` has a `keypoints` attribute
-        keypoints = person.xy if hasattr(person, "xy") else []  # get keypoint coordinates or an empty list if missing
+    frame = result.orig_img  # Original frame
 
-        # Create a dictionary for each person in each frame
-        data = {
-            "frame_id": frame_id,
-            "person_id": person_id
-        }
-
-        # Loop through each joint label and assign coordinates if available
+    # Sort people by distance (assuming bounding box area indicates depth)
+    sorted_people = sorted(result.keypoints, key=lambda p: p.box.area if hasattr(p, "box") else 0, reverse=True)
+    
+    if sorted_people:  # Check if any person is detected
+        # Process only the closest person
+        person = sorted_people[0]
+        keypoints = person.xy if hasattr(person, "xy") else []
+        joint_data = {}
+        
+        # Extract keypoints into the joint_data dictionary
         for i, label in enumerate(joint_labels):
-            if i < len(keypoints) and len(keypoints[i]) >= 2:  # Check if keypoint data is present and has x, y
-                data[f"{label}_x"] = keypoints[i][0]  # x-coordinate of the joint
-                data[f"{label}_y"] = keypoints[i][1]  # y-coordinate of the joint
-            else:
-                # Assign None if the keypoint data is missing
-                data[f"{label}_x"] = None
-                data[f"{label}_y"] = None
+            x, y = int(keypoints[0][i][0]), int(keypoints[0][i][1])
+            joint_data[label] = (x, y)
+            print(x,y)
+            # Draw the keypoint on the frame
+            cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
+        
+        # Get feedback for this person
+        feedback_text = check_deadlift_form(joint_data)
 
-        # Append to the list of all joints
-        all_joints.append(data)
+        # Display feedback on the frame
+        y_offset = 50  # Starting y position for text display
+        for line in feedback_text.splitlines():
+            cv2.putText(frame, line, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            y_offset += 20  # Line spacing
 
-# Convert to a DataFrame
-joints_df = pd.DataFrame(all_joints)
+    # Show the frame with feedback and keypoints
+    cv2.imshow("Deadlift Form Feedback", frame)
+    
+    # Press 'q' to exit early
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-# Save the DataFrame to a CSV file for further analysis
-joints_df.to_csv("joint_positions_output.csv", index=False)
-
-# Display DataFrame for inspection
-joints_df.head()
+# Release resources
+cv2.destroyAllWindows()
