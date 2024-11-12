@@ -20,51 +20,75 @@ def calculate_angle(p1, p2, p3):
     angle = np.degrees(np.arccos(cosine_angle))
     return angle
 
+# Phase Check Functions
+def check_setup_phase(hip_angle, knee_angle):
+    feedback = ""
+    if not (50 <= hip_angle <= 60):
+        feedback += f"Adjust hip angle in setup: {hip_angle:.2f}° (ideal: 50-60°)\n"
+    if not (100 <= knee_angle <= 110):
+        feedback += f"Adjust knee angle in setup: {knee_angle:.2f}° (ideal: 100-110°)\n"
+    return feedback
+
+def check_initial_pull_phase(hip_angle, knee_angle):
+    feedback = ""
+    if not (110 <= hip_angle <= 135):
+        feedback += f"Adjust hip angle in initial pull: {hip_angle:.2f}° (ideal: 110-135°)\n"
+    if not (110 <= knee_angle <= 135):
+        feedback += f"Adjust knee angle in initial pull: {knee_angle:.2f}° (ideal: 110-135°)\n"
+    return feedback
+
+def check_mid_pull_phase(hip_angle, knee_angle):
+    feedback = ""
+    if not (80 <= hip_angle <= 85):
+        feedback += f"Adjust hip angle in mid-pull: {hip_angle:.2f}° (ideal: 80-85°)\n"
+    if not (160 <= knee_angle <= 170):
+        feedback += f"Adjust knee angle in mid-pull: {knee_angle:.2f}° (ideal: 160-170°)\n"
+    return feedback
+
+def check_lockout_phase(hip_angle, knee_angle):
+    feedback = ""
+    if hip_angle < 160:
+        feedback += f"Adjust hip angle in lockout: {hip_angle:.2f}° (should be fully extended)\n"
+    if knee_angle < 170:
+        feedback += f"Adjust knee angle in lockout: {knee_angle:.2f}° (should be fully extended)\n"
+    return feedback
+
+def check_descent_phase(hip_angle, knee_angle):
+    feedback = ""
+    if not (60 <= hip_angle <= 70):
+        feedback += f"Adjust hip angle in descent: {hip_angle:.2f}° (ideal: 60-70°)\n"
+    if not (100 <= knee_angle <= 110):
+        feedback += f"Adjust knee angle in descent: {knee_angle:.2f}° (ideal: 100-110°)\n"
+    return feedback
+
+# Main function to check deadlift form
 def check_deadlift_form(joint_data):
     left_shoulder = joint_data.get("left_shoulder", None)
     left_hip = joint_data.get("left_hip", None)
     left_knee = joint_data.get("left_knee", None)
     left_ankle = joint_data.get("left_ankle", None)
-    
 
     hip_angle = calculate_angle(left_shoulder, left_hip, left_knee)
     knee_angle = calculate_angle(left_hip, left_knee, left_ankle)
-    
+
+    # Check each phase based on hip and knee angles
     feedback = ""
-    if hip_angle is not None:
-        if 50 <= hip_angle <= 60:
-            feedback += "Good hip angle for starting position.\n"
-        elif 110 <= hip_angle <= 135:
-            feedback += "Good hip angle for lifting.\n"
-        elif 80 < hip_angle <= 85:
-            feedback += "Good hip angle for mid-pull.\n"
-        elif hip_angle > 160:
-            feedback += "Good hip angle for lockout.\n"
-        else:
-            feedback += f"Adjust hip angle: {hip_angle:.2f}°\n"
+    if hip_angle is not None and knee_angle is not None:
+        feedback += check_setup_phase(hip_angle, knee_angle)
+        feedback += check_initial_pull_phase(hip_angle, knee_angle)
+        feedback += check_mid_pull_phase(hip_angle, knee_angle)
+        feedback += check_lockout_phase(hip_angle, knee_angle)
+        feedback += check_descent_phase(hip_angle, knee_angle)
     else:
-        feedback += "Hip angle data unavailable.\n"
-    
-    if knee_angle is not None:
-        if 100 <= knee_angle <= 110:
-            feedback += "Good knee angle for starting position.\n"
-        elif 110 <= knee_angle <= 135:
-            feedback += "Good knee angle for lifting.\n"
-        elif 160 < knee_angle <= 170:
-            feedback += "Good knee angle for mid-pull.\n"
-        elif knee_angle > 170:
-            feedback += "Good knee angle for lockout.\n"
-        else:
-            feedback += f"Adjust knee angle: {knee_angle:.2f}°\n"
-    else:
-        feedback += "Knee angle data unavailable.\n"
-    
+        feedback += "Angle data unavailable for form check.\n"
+
     return feedback
 
+# Process video and check form
 results = model.track(source=video_source, stream=True)
 
 for frame_id, result in enumerate(results):
-    frame = result.orig_img  
+    frame = result.orig_img
 
     sorted_people = sorted(result.keypoints, key=lambda p: p.box.area if hasattr(p, "box") else 0, reverse=True)
     
