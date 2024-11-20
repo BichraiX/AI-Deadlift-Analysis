@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['barbell']
+
+roboflow:
+  workspace: personal-yvwij
+  project: barbell-detector-svmfh
+  version: 12
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/personal-yvwij/barbell-detector-svmfh/dataset/12
