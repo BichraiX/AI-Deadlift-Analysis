@@ -1,3 +1,5 @@
 models
 .venv
 runs
+deadlift_classifier.pth
+dataset
