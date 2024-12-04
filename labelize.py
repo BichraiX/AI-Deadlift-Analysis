@@ -11,7 +11,6 @@ joint_labels = ["nose", "left_eye", "right_eye", "left_ear", "right_ear",
 
 video_source = "dataset/example1_good.mp4"
 
- 
 
 # Main function to check deadlift form
 def check_deadlift_form(joint_data):
