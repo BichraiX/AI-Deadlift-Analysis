@@ -389,6 +389,7 @@ def smooth_phases(phases, N):
 
 
 
+
 def save_phase_video(video_path, phase, sequence_counter, start_frame, end_frame, output_dir, video_properties):
     """
     Save a specific phase segment of the video to a file.
