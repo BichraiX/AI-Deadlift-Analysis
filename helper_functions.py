@@ -220,31 +220,6 @@ def process_video(input_path, output_path, output_resolution, output_fps, vertic
 
     print(f"Processing completed. Saved to {output_path}")
 
-
-
-def deriv_Barre(yBarre, smoothing=5):
-    """
-    Calculate the derivative (rate of change) of the bar's vertical position over a specified number of frames.
-
-    Parameters:
-    - yBarre (array-like): Vertical positions of the bar over time.
-    - smoothing (int): Number of frames over which to compute the derivative, used to reduce noise.
-
-    Returns:
-    - np.ndarray: Array of the rate of change (derivative) of yBarre over time.
-    """
-    yBarre = np.array(yBarre)  # Ensure input is a NumPy array
-    derivatives = np.zeros_like(yBarre)  # Initialize array for derivatives
-    
-    # Compute the derivative over the valid range
-    for i in range(len(yBarre) - smoothing):
-        derivatives[i] = (yBarre[i + smoothing] - yBarre[i]) / smoothing
-    
-    # Fill the remaining positions with NaN or 0 if smoothing window exceeds bounds
-    derivatives[-smoothing:] = np.nan  # Optional: change np.nan to 0 if needed
-
-    return derivatives
-
 def is_vertical(yHead, yKnee):
     """
     Determine if the bar starts below the knees at the beginning of the movement.
@@ -260,55 +235,87 @@ def is_vertical(yHead, yKnee):
         return True
     return False
 
-def bar_direction(yBarre, i, smoothing, y1, y2, alpha=0.01):
+import numpy as np
+
+def deriv_Barre(yBarre, smoothing=5):
+    """
+    Calculate the derivative (rate of change) of the bar's vertical position over a specified number of frames.
+
+    Parameters:
+    - yBarre (array-like): Vertical positions of the bar over time.
+    - smoothing (int): Number of frames over which to compute the derivative, used to reduce noise.
+
+    Returns:
+    - np.ndarray: Array of the rate of change (derivative) of yBarre over time.
+    """
+    yBarre = np.array(yBarre)  # Ensure input is a NumPy array
+    derivatives = np.zeros_like(yBarre, dtype=float)  # Initialize array for derivatives
+
+    # Handle np.nan in the input by forward-filling
+    yBarre_filled = np.copy(yBarre)
+    for i in range(1, len(yBarre_filled)):
+        if np.isnan(yBarre_filled[i]):
+            yBarre_filled[i] = yBarre_filled[i - 1]  # Use the previous value for np.nan
+
+    # Compute the derivative over the valid range
+    for i in range(len(yBarre) - smoothing):
+        derivatives[i] = (yBarre_filled[i + smoothing] - yBarre_filled[i]) / smoothing
+
+    # Fill the remaining positions with NaN
+    derivatives[-smoothing:] = np.nan
+
+    return derivatives
+
+
+def bar_direction(yBarre, deriv, i, smoothing, alpha=0.01):
     """
     Determine the direction of the bar's movement (up, down, or still) at a specific point in time.
 
     Parameters:
     - yBarre (list or array): Vertical positions of the bar over time.
+    - deriv (array-like): Derivatives (rate of change) of the bar's vertical positions over time.
     - i (int): The current frame index at which to check the bar's movement.
     - smoothing (int): Number of frames over which to compute the derivative.
-    - y1 (list or array): Vertical positions of the first body part (e.g., shoulders).
-    - y2 (list or array): Vertical positions of the second body part (e.g., waist).
     - alpha (float): Threshold ratio for determining significant movement. The derivative must exceed
-                     alpha times the vertical distance between y1 and y2 to count as movement.
+                     alpha times the vertical range of the derivatives to count as movement.
 
     Returns:
     - str: "up" if the bar is moving upward.
            "down" if the bar is moving downward.
            "still" if the bar is stationary.
     """
+    deriv_range = np.nanmax(np.abs(deriv))  # Vertical range of derivatives
+    threshold = deriv_range * alpha  # Threshold based on the range
 
-    treshold = abs(y2[i] - y1[i]) * alpha  # Threshold based on the vertical distance between y1 and y2
-    if deriv_Barre(yBarre, i, smoothing) > treshold:
-        return "up"
-    elif deriv_Barre(yBarre, i, smoothing) < -treshold:
+    if deriv[i] > threshold:
         return "down"
+    elif deriv[i] < -threshold:
+        return "up"
     else:
         return "still"
-    
-def get_pre_phase(yBarre, smoothing, y1, y2, alpha=0.01):
+
+
+def get_pre_phase(yBarre, deriv, smoothing, alpha=0.01):
     """
     Apply the bar_direction function to all components of the yBarre array.
 
     Parameters:
     - yBarre (list or array): Vertical positions of the bar over time.
+    - deriv (array-like): Derivatives (rate of change) of the bar's vertical positions over time.
     - smoothing (int): Number of frames over which to compute the derivative.
-    - y1 (list or array): Vertical positions of the first body part (e.g., shoulders).
-    - y2 (list or array): Vertical positions of the second body part (e.g., waist).
     - alpha (float): Threshold ratio for determining significant movement.
 
     Returns:
     - np.ndarray: Array of directions ("up", "down", "still") for each frame.
     """
-
     directions = []
     for i in range(len(yBarre)):
-        direction = bar_direction(yBarre, i, smoothing, y1, y2, alpha)
+        direction = bar_direction(yBarre, deriv, i, smoothing, alpha)
         directions.append(direction)
     return np.array(directions)
 
-def get_phase(yBarre, yKnee, smoothing, y1, y2, alpha=0.01):
+
+def get_phase(yBarre, yKnee, smoothing, alpha=0.01):
     """
     Determine the phase of the bar's movement, distinguishing between "still_down" and "still_up".
 
@@ -316,16 +323,19 @@ def get_phase(yBarre, yKnee, smoothing, y1, y2, alpha=0.01):
     - yBarre (list or array): Vertical positions of the bar over time.
     - yKnee (list or array): Vertical positions of the knees over time.
     - smoothing (int): Number of frames over which to compute the derivative.
-    - y1 (list or array): Vertical positions of the first body part (e.g., shoulders).
-    - y2 (list or array): Vertical positions of the second body part (e.g., waist).
     - alpha (float): Threshold ratio for determining significant movement.
 
     Returns:
     - np.ndarray: Array of phases ("up", "down", "still_down", "still_up") for each frame.
     """
-    pre_phases = get_pre_phase(yBarre, smoothing, y1, y2, alpha)
-    phases = []
+    # Compute derivatives of yBarre, handling np.nan values
+    deriv = deriv_Barre(yBarre, smoothing)
 
+    # Determine pre-phases (up, down, or still) based on derivatives
+    pre_phases = get_pre_phase(yBarre, deriv, smoothing, alpha)
+
+    # Determine final phases with "still_down" and "still_up"
+    phases = []
     for i, phase in enumerate(pre_phases):
         if phase == "still":
             if yBarre[i] > yKnee[i]:
@@ -335,7 +345,10 @@ def get_phase(yBarre, yKnee, smoothing, y1, y2, alpha=0.01):
         else:
             phases.append(phase)
 
+    print(deriv)
+    print(phases)
     return np.array(phases)
+
 
 
 def save_phase_video(video_path, phase, sequence_counter, start_frame, end_frame, output_dir, video_properties):
