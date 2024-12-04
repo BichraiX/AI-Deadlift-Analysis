@@ -18,7 +18,13 @@ def check_deadlift_form(joint_data):
     left_hip = joint_data.get("left_hip", None)
     left_knee = joint_data.get("left_knee", None)
     left_ankle = joint_data.get("left_ankle", None)
-
+    let_ear = joint_data.get("left_ear", None)
+    right_shoulder = joint_data.get("right_shoulder", None)
+    right_hip = joint_data.get("right_hip", None)
+    right_knee = joint_data.get("right_knee", None)
+    right_ankle = joint_data.get("right_ankle", None)
+    right_ear = joint_data.get("left_ear", None)
+    
     hip_angle = calculate_angle(left_shoulder, left_hip, left_knee)
     knee_angle = calculate_angle(left_hip, left_knee, left_ankle)
 
