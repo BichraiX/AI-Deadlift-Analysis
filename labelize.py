@@ -1,53 +1,26 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
+from utils import check_deadlift_form
 
 pose_detection_model = YOLO("models/yolo11n-pose.pt")
+barbell_detection_model = YOLO("models/best_barbell_detector_bar.pt")
 
 joint_labels = ["nose", "left_eye", "right_eye", "left_ear", "right_ear",
                 "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
                 "left_wrist", "right_wrist", "left_hip", "right_hip",
                 "left_knee", "right_knee", "left_ankle", "right_ankle"]
 
-video_source = "dataset/example1_good.mp4"
-
- 
-# Main function to check deadlift form
-def check_deadlift_form(joint_data):
-    left_shoulder = joint_data.get("left_shoulder", None)
-    left_hip = joint_data.get("left_hip", None)
-    left_knee = joint_data.get("left_knee", None)
-    left_ankle = joint_data.get("left_ankle", None)
-    let_ear = joint_data.get("left_ear", None)
-    right_shoulder = joint_data.get("right_shoulder", None)
-    right_hip = joint_data.get("right_hip", None)
-    right_knee = joint_data.get("right_knee", None)
-    right_ankle = joint_data.get("right_ankle", None)
-    right_ear = joint_data.get("left_ear", None)
-    
-    hip_angle = calculate_angle(left_shoulder, left_hip, left_knee)
-    knee_angle = calculate_angle(left_hip, left_knee, left_ankle)
-
-    # Check each phase based on hip and knee angles
-    feedback = ""
-    if hip_angle is not None and knee_angle is not None:
-        feedback += check_setup_phase(hip_angle, knee_angle)
-        feedback += check_initial_pull_phase(hip_angle, knee_angle)
-        feedback += check_mid_pull_phase(hip_angle, knee_angle)
-        feedback += check_lockout_phase(hip_angle, knee_angle)
-        feedback += check_descent_phase(hip_angle, knee_angle)
-    else:
-        feedback += "Angle data unavailable for form check.\n"
-
-    return feedback
+video_source = "dataset/good/good001.mp4"
 
 # Process video and check form
-results = pose_detection_model.track(source=video_source, stream=True)
+pose_results = pose_detection_model.track(source=video_source, stream=True)
+barbell_results = barbell_detection_model.track(source=video_source, stream=True)
 
-for frame_id, result in enumerate(results):
-    frame = result.orig_img
+for ((frame_id, pose_result),(_, barbell_result)) in zip(enumerate(pose_results),enumerate(barbell_results)):
+    frame = pose_result.orig_img
 
-    sorted_people = sorted(result.keypoints, key=lambda p: p.box.area if hasattr(p, "box") else 0, reverse=True)
+    sorted_people = sorted(pose_result.keypoints, key=lambda p: p.box.area if hasattr(p, "box") else 0, reverse=True)
     
     if sorted_people:  
         person = sorted_people[0]
@@ -59,8 +32,10 @@ for frame_id, result in enumerate(results):
             joint_data[label] = (x, y)
             cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
         
-        feedback_text = check_deadlift_form(joint_data)
-
+        largest_box = max(barbell_result.boxes, key=lambda box: (box.xyxy[0][2] - box.xyxy[0][0]) * (box.xyxy[0][3] - box.xyxy[0][1]))
+        x_min, y_min, x_max, y_max = map(int, largest_box.xyxy[0].tolist())
+        barbell_coords = ((x_min + x_max) / 2, (y_min + y_max) / 2)
+        feedback_text = check_deadlift_form(joint_data, barbell_coords)
         y_offset = 50  
         for line in feedback_text.splitlines():
             cv2.putText(frame, line, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
