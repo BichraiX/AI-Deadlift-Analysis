@@ -2,3 +2,12 @@
 runs
 deadlift_classifier.pth
 dataset
+barbell_positions.csv
+joint_positions_with_barbell.csv
+joint_positions.csv
+joints_position_new.csv
+joints_position.csv
+models/best_barbell_detector 2.pt
+models/yolo11n 2.pt
+models/yolo11x-pose.pt
+models/yolov8n 2.pt
