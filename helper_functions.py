@@ -315,7 +315,7 @@ def get_pre_phase(yBarre, deriv, smoothing, alpha=0.01):
     return np.array(directions)
 
 
-def get_phase(yBarre, yKnee, smoothing, alpha=0.01):
+def get_phase(yBarre, yKnee, smoothing, alpha=0.01, N=5):
     """
     Determine the phase of the bar's movement, distinguishing between "still_down" and "still_up".
 
@@ -324,6 +324,7 @@ def get_phase(yBarre, yKnee, smoothing, alpha=0.01):
     - yKnee (list or array): Vertical positions of the knees over time.
     - smoothing (int): Number of frames over which to compute the derivative.
     - alpha (float): Threshold ratio for determining significant movement.
+    - N (int): Minimum length of a phase to avoid short interruptions.
 
     Returns:
     - np.ndarray: Array of phases ("up", "down", "still_down", "still_up") for each frame.
@@ -345,9 +346,46 @@ def get_phase(yBarre, yKnee, smoothing, alpha=0.01):
         else:
             phases.append(phase)
 
-    print(deriv)
-    print(phases)
-    return np.array(phases)
+    # Post-process to avoid short interruptions
+    phases = np.array(phases)  # Convert to numpy array for easier manipulation
+    phases = smooth_phases(phases, N)
+
+    return phases
+
+
+def smooth_phases(phases, N):
+    """
+    Smooth the phase transitions by removing short interruptions of less than N frames.
+
+    Parameters:
+    - phases (np.ndarray): Array of phases ("up", "down", "still_down", "still_up").
+    - N (int): Minimum length of a phase to avoid short interruptions.
+
+    Returns:
+    - np.ndarray: Smoothed array of phases.
+    """
+    smoothed_phases = phases.copy()
+    current_phase = phases[0]
+    start_idx = 0
+
+    for i in range(1, len(phases)):
+        if phases[i] != current_phase:
+            # Check the length of the current phase
+            phase_length = i - start_idx
+            if phase_length < N:
+                # Replace the short phase with the previous phase
+                smoothed_phases[start_idx:i] = current_phase
+            # Update the current phase
+            current_phase = phases[i]
+            start_idx = i
+
+    # Handle the last phase
+    phase_length = len(phases) - start_idx
+    if phase_length < N:
+        smoothed_phases[start_idx:] = current_phase
+
+    return smoothed_phases
+
 
 
 

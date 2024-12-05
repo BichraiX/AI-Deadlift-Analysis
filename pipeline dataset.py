@@ -81,8 +81,9 @@ for category, input_dir in input_dirs.items():
 
         # Get phases
         smoothing = 5  # Smoothing factor for the derivative
-        alpha = 0.05  # Weight for the derivative
-        phases = hf.get_phase(barbell_y_means, knee_y, smoothing, alpha)
+        alpha = 0.1  # Weight for the derivative
+        N = 3 # Smoothing factor for the phase detection to avoid flickering over one frame
+        phases = hf.get_phase(barbell_y_means, knee_y, smoothing, alpha, N)
 
         # Separate the video into phases
         hf.separate_phases(preprocessed_video_path, phases, output_dir)
