@@ -5,7 +5,7 @@ import numpy as np
 from utils import calculate_angle, check_lockout_phase, check_descending_phase, check_ascending_phase, check_setup_phase
 
 
-pose_detection_model = YOLO("models/yolo11n-pose.pt")
+pose_detection_model = YOLO("models/yolo11x-pose.pt")
 barbell_detection_model = YOLO("models/best_barbell_detector_bar.pt")
 
 joint_labels = ["nose", "left_eye", "right_eye", "left_ear", "right_ear",
