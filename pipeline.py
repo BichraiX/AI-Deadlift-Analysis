@@ -106,7 +106,7 @@ output_dir = "phases"
 hf.separate_phases(prepocessed_video, phases, output_dir) #to be checked
 
 
-"""
+
 # Get the list of video files in the output directory
 video_files = [f for f in os.listdir(output_dir) if f.endswith(('.mp4'))]
 
@@ -118,11 +118,10 @@ for video_file in video_files:
     
     # Apply the estimate_movement function to the video
     try:
-        movement_result = estimate_movement(video_path, phase) # Movement estimation to be implement with a model per phase
+        movement_result = estimate_movement(video_path, phase, model_pose, model_barbell) # Movement estimation to be implement with a model per phase
         results[video_file] = movement_result
         print(f"Result for {video_file}: {movement_result}")
     except Exception as e:
         print(f"Error processing {video_file}: {e}")
 
 # Print the results
-"""

@@ -2,6 +2,9 @@ import pandas as pd
 import cv2
 import numpy as np
 import os
+from classifiers_training.perceiver_based_classifier import DeadliftMovementClassifier
+import torch
+import torch.nn.functional as F
 
 def extract_joint_positions(video_path, model_pose, output_csv="joint_positions.csv", debug=False):
     """
@@ -70,10 +73,10 @@ def extract_joint_positions(video_path, model_pose, output_csv="joint_positions.
         joint_positions.append(frame_joint_positions)
 
         # Show debug video if enabled
-        if debug and frame is not None:
-            cv2.imshow("Joint Positions Debug", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        # if debug and frame is not None:
+        #     cv2.imshow("Joint Positions Debug", frame)
+        #     if cv2.waitKey(1) & 0xFF == ord('q'):
+        #         break
 
     if cap:
         cap.release()  # Release video capture if debug mode is enabled
@@ -140,10 +143,10 @@ def extract_barbell_positions(video_path, model_barbell, output_csv="barbell_pos
         barbell_positions.append(frame_barbell_positions)
 
         # Show debug video if enabled
-        if debug and frame is not None:
-            cv2.imshow("Barbell Positions Debug", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        # if debug and frame is not None:
+        #     cv2.imshow("Barbell Positions Debug", frame)
+        #     if cv2.waitKey(1) & 0xFF == ord('q'):
+        #         break
 
     if cap:
         cap.release()  # Release video capture if debug mode is enabled
@@ -488,3 +491,169 @@ def separate_phases(video_input, phases, output_dir="output_phases"):
 
     cap.release()
     print(f"All phases have been separated and saved in {output_dir}.")
+
+# Assuming these variables and models are already defined above:
+# device, DeadliftMovementClassifier, etc.
+
+import torch
+import torch.nn.functional as F
+import cv2
+import numpy as np
+import os
+from classifiers_training.perceiver_based_classifier import DeadliftMovementClassifier
+from ultralytics import YOLO
+
+def estimate_movement(video_path, pose_detection_model, barbell_detection_model):
+    """
+    Estimates the movement phase of a deadlift by processing the video exactly as done during training.
+    It uses YOLO models to detect pose and barbell at each frame, constructs sequences of frames
+    and corresponding keypoints+barbell coordinates, and then runs inference using the trained classifier.
+    
+    Parameters:
+        video_path (str): Path to the input video file.
+        pose_detection_model: The YOLO pose detection model used during training.
+        barbell_detection_model: The YOLO barbell detection model used during training.
+        
+    Returns:
+        str: The predicted movement phase label.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Determine which model and labels to use based on the video_path
+    if "still_up" in video_path:
+        model_path = "models/best_deadlift_lockout_phase_classifier.pth"
+        phase_key = "lockout"
+        class_labels = [
+            "Incomplete lockout due to insufficient glute engagement.",
+            "Shoulders are drifting too far behind the bar. Align them vertically.",
+            "Lockout is correct."
+        ]
+    elif "still_down" in video_path:
+        model_path = "models/best_deadlift_setup_phase_classifier.pth"
+        phase_key = "setup"
+        class_labels = [
+            "Setup error: Hips are too low (like a squat).",
+            "Setup error: Rounded upper back (thoracic spine). Maintain a neutral spine.",
+            "Setup phase is correct."
+        ]
+    elif "up" in video_path and "still_up" not in video_path:
+        model_path = "models/best_deadlift_ascending_phase_classifier.pth"
+        phase_key = "ascending"
+        class_labels = [
+            "Ascending error: Rounded lower back (lumbar spine). Maintain a neutral spine to avoid injury.",
+            "Ascending error: The barbell is drifting away from the body. Keep it close to your shins.",
+            "Ascending phase is correct."
+        ]
+    elif "down" in video_path and "still_down" not in video_path:
+        model_path = "models/best_deadlift_descending_phase_classifier.pth"
+        phase_key = "descending"
+        class_labels = [
+            "Descending error: Barbell is drifting away from the legs. Keep it close to your shins.",
+            "Descending error: Rounded lower back. Maintain a neutral spine during the descent.",
+            "Descending phase is correct."
+        ]
+    else:
+        raise ValueError("Video path does not contain recognizable phase keywords.")
+
+    # Model parameters
+    num_keypoints = 36  # 17 joints * 2 + barbell (2 coords) = 34 + 2 = 36
+    pretrained_visual_model_name = "google/vit-base-patch16-224-in21k"
+    latent_dim = 256
+    num_visual_tokens = 16
+    num_classes = len(class_labels)
+    seq_length = 5  # Same as training
+
+    # Load the model
+    inference_model = DeadliftMovementClassifier(
+        num_keypoints,
+        pretrained_visual_model_name,
+        latent_dim,
+        num_visual_tokens,
+        num_classes
+    ).to(device)
+    inference_model.load_state_dict(torch.load(model_path, map_location=device))
+    inference_model.eval()
+
+    # Open video
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise IOError(f"Cannot open video file: {video_path}")
+
+    frame_buffer = []
+    all_logits = []
+
+    with torch.no_grad():
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Pose detection
+            pose_result = pose_detection_model(frame)
+            # Barbell detection
+            barbell_result = barbell_detection_model(frame)
+
+            # Extract keypoints from the largest person detected
+            sorted_people = sorted(
+                pose_result[0].keypoints, 
+                key=lambda p: p.box.area if hasattr(p, "box") else 0, 
+                reverse=True
+            )
+            if not sorted_people:
+                continue
+            person = sorted_people[0]
+            keypoints = person.xy if hasattr(person, "xy") else None
+            if keypoints is None or len(keypoints) == 0:
+                continue
+
+            # Extract barbell coordinates from the largest box
+            if barbell_result[0].boxes:
+                largest_box = max(
+                    barbell_result[0].boxes,
+                    key=lambda box: (box.xyxy[0][2] - box.xyxy[0][0]) * (box.xyxy[0][3] - box.xyxy[0][1]),
+                )
+                x_min, y_min, x_max, y_max = map(int, largest_box.xyxy[0].tolist())
+                barbell_coords = [(x_min + x_max) / 2, (y_min + y_max) / 2]
+            else:
+                continue  # Skip if no barbell detected
+
+            keypoints = keypoints.to(device)
+            barbell_tensor = torch.tensor(barbell_coords, device=device).unsqueeze(0).unsqueeze(0)  # (1,1,2)
+
+            # Combine keypoints (1,17,2) and barbell (1,1,2) => (1,18,2)
+            # Note: keypoints is typically (1,17,2) if you have 17 joints
+            # Ensure that you used exactly the same joint setup as in training.
+            combined_vector = torch.cat((keypoints, barbell_tensor), dim=1)
+
+            # Add to frame buffer
+            frame_buffer.append((frame, combined_vector))
+
+            # If we have enough frames for a sequence
+            if len(frame_buffer) == seq_length:
+                images_seq, kpts_seq = zip(*frame_buffer)
+                # Convert images to tensor
+                images_seq = torch.stack([torch.tensor(img, dtype=torch.float32, device=device) for img in images_seq])
+                images_seq = images_seq.unsqueeze(0) ## add batch dimension
+                # Convert keypoints to correct shape
+                kpts_seq = torch.stack(kpts_seq, dim=0).to(device) # (seq_length, 1, 18, 2)
+                seq_length, batch_size, _, _ = kpts_seq.shape
+                kpts_seq = kpts_seq.view(batch_size,seq_length, -1)
+                # Run inference
+                logits = inference_model(kpts_seq, images_seq)
+                all_logits.append(logits.cpu())
+
+                # Slide the window
+                frame_buffer.pop(0)
+
+    cap.release()
+
+    if not all_logits:
+        # No predictions were made
+        return "No valid predictions."
+
+    # Aggregate predictions: average logits and pick the best class
+    avg_logits = torch.mean(torch.cat(all_logits, dim=0), dim=0, keepdim=True)
+    predicted_class_idx = torch.argmax(avg_logits, dim=1).item()
+    movement_result = class_labels[predicted_class_idx]
+
+    return movement_result
