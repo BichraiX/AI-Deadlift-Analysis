@@ -64,12 +64,6 @@ hf.process_video(video_path, prepocessed_video, res, fps, vertical)
 
 print("Video pre-processed successfully!")
 
-#######################################################################################################################################
-
-### Everything below this line has not been tested or implemented yet
-
-#######################################################################################################################################
-
 ### Extract barbell positions and get the phase of the lift (TBD : better model or localized detection)
 
 # Name of the output csv file with the barbell positions

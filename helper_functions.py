@@ -143,10 +143,10 @@ def extract_barbell_positions(video_path, model_barbell, output_csv="barbell_pos
         barbell_positions.append(frame_barbell_positions)
 
         # Show debug video if enabled
-        # if debug and frame is not None:
-        #     cv2.imshow("Barbell Positions Debug", frame)
-        #     if cv2.waitKey(1) & 0xFF == ord('q'):
-        #         break
+        if debug and frame is not None:
+            cv2.imshow("Barbell Positions Debug", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
     if cap:
         cap.release()  # Release video capture if debug mode is enabled
