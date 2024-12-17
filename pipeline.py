@@ -1,14 +1,13 @@
 #Complete Pipeline of the app
 
-#Import useful libraries
 print("Loading libraries and models...")
 
-import os                       #OS module 
-import helper_functions as hf   #Helper functions for the pipeline
-import cv2                      #OpenCV
-from ultralytics import YOLO    #YOLO
-import numpy as np              #Numpy
-import pandas as pd             #Pandas
+import os                      
+import helper_functions as hf   
+import cv2                      
+from ultralytics import YOLO  
+import numpy as np              
+import pandas as pd           
 
 ### Export joint positions and barbell bounding box data for all frames as csv
 
@@ -16,10 +15,8 @@ import pandas as pd             #Pandas
 model_barbell = YOLO('models/best_barbell_detector_bar.pt')  # Our fine-tuned model for the detection of the barbell
 model_pose = YOLO("models/yolo11x-pose.pt")  # Ultralytics' model for the pose detection
 
-#Path to the video
 video_path = input("Video path: ")  
 
-#Output CSV file
 output_csv_pose = "joints_position.csv"
 
 # Call the function to extract in a csv joint positions for all frames
@@ -59,13 +56,12 @@ print(vertical)
 ### Resize and rotate the video
 prepocessed_video = "preprocessed.mp4"
 res = (1280, 720)  # Output resolution 1280x720 (16:9 720p)
-fps = 30  # Output frames per second
+fps = 30 
 hf.process_video(video_path, prepocessed_video, res, fps, vertical)
 
 print("Video pre-processed successfully!")
 
 
-# Name of the output csv file with the barbell positions
 output_csv_barbell = "barbell_positions.csv"
 
 # Call the function to extract the barbell positions
@@ -77,7 +73,6 @@ print("Extracting joint positions...")
 hf.extract_joint_positions(prepocessed_video, model_pose, output_csv_new_pose, debug=True)
 print("Joint positions and barbell bounding box data exported successfully!")
 
-# Load the csv files with the barbell and new joints positions
 df_joints_new = pd.read_csv(output_csv_new_pose)
 df_barbell = pd.read_csv(output_csv_barbell)
 
@@ -96,7 +91,7 @@ phases = hf.get_phase(barbell_y_means, knee_y, smoothing, alpha) #to be implemen
 output_dir = "phases"
 
 # Separate the video into phases
-hf.separate_phases(prepocessed_video, phases, output_dir) #to be checked
+hf.separate_phases(prepocessed_video, phases, output_dir)
 
 
 
@@ -117,5 +112,3 @@ for video_file in video_files:
         print(f"Result for {video_file}: {movement_result}")
     except Exception as e:
         print(f"Error processing {video_file}: {e}")
-
-# Print the results
