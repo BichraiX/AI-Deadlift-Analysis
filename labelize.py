@@ -2,7 +2,7 @@ import os
 from ultralytics import YOLO
 import cv2
 import numpy as np
-from utils import calculate_angle, check_lockout_phase, check_descending_phase, check_ascending_phase, check_setup_phase
+from helper_functions import calculate_angle, check_lockout_phase, check_descending_phase, check_ascending_phase, check_setup_phase
 
 
 pose_detection_model = YOLO("models/yolo11x-pose.pt")
@@ -14,9 +14,8 @@ joint_labels = ["nose", "left_eye", "right_eye", "left_ear", "right_ear",
                 "left_knee", "right_knee", "left_ankle", "right_ankle"]
 
 input_folder = "sep_alpha_0.1/sep_90/bad/"
-output_folder = "processed_videos/"
+output_folder = "processed_videos/train/"
 
-# Create output folders if not exist
 os.makedirs(output_folder, exist_ok=True)
 
 def save_video(video_name, frames, output_path):
@@ -27,7 +26,6 @@ def save_video(video_name, frames, output_path):
         out.write(frame)
     out.release()
 
-# Process videos in the folder
 for video_file in os.listdir(input_folder):
     if not video_file.endswith(('.mp4', '.avi', '.mov')):
         continue
@@ -39,7 +37,6 @@ for video_file in os.listdir(input_folder):
     processed_frames = []
     phase_function = None
 
-    # Determine which function to apply
     if "still_up" in video_file:
         phase_function = check_lockout_phase
     elif "up" in video_file and "still_up" not in video_file:
@@ -85,7 +82,6 @@ for video_file in os.listdir(input_folder):
                 (joint_data['left_ear'][1] + joint_data['right_ear'][1]) / 2
             )
 
-            # Calculate barbell position
             if barbell_result.boxes:
                 largest_box = max(barbell_result.boxes, key=lambda box: (box.xyxy[0][2] - box.xyxy[0][0]) * (box.xyxy[0][3] - box.xyxy[0][1]))
                 x_min, y_min, x_max, y_max = map(int, largest_box.xyxy[0].tolist())
@@ -94,7 +90,6 @@ for video_file in os.listdir(input_folder):
                 barbell_coords = None
 
 
-            # Calculate angles and apply the appropriate function
             feedback_text = ""
             if barbell_coords is not None and phase_function == check_setup_phase:
                 hip_knee_ankle_angle = calculate_angle(hip, knee, ankle)
@@ -118,7 +113,6 @@ for video_file in os.listdir(input_folder):
                 lumbar_spine_angle = calculate_angle(shoulder, hip, knee)
                 feedback_text = phase_function(shoulder_hip_knee_angle, hip_knee_ankle_angle, barbell_midfoot_angle, lumbar_spine_angle)
 
-            # Display feedback
             y_offset = 50
             for line in feedback_text.splitlines():
                 cv2.putText(frame, line, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -130,7 +124,6 @@ for video_file in os.listdir(input_folder):
 
     cv2.destroyAllWindows()
 
-    # Save processed video
     if processed_frames:
         output_subfolder = os.path.join(output_folder, feedback_text)
         os.makedirs(output_subfolder, exist_ok=True)

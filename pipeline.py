@@ -64,7 +64,6 @@ hf.process_video(video_path, prepocessed_video, res, fps, vertical)
 
 print("Video pre-processed successfully!")
 
-### Extract barbell positions and get the phase of the lift (TBD : better model or localized detection)
 
 # Name of the output csv file with the barbell positions
 output_csv_barbell = "barbell_positions.csv"
@@ -113,7 +112,7 @@ for video_file in video_files:
     # Apply the estimate_movement function to the video
     try:
         video_path = f"phases/{video_file}"
-        movement_result = hf.estimate_movement(video_path, model_pose, model_barbell) # Movement estimation to be implement with a model per phase
+        movement_result = hf.estimate_movement(video_path, model_pose, model_barbell) # Movement estimation with one model per phase
         results[video_file] = movement_result
         print(f"Result for {video_file}: {movement_result}")
     except Exception as e:
