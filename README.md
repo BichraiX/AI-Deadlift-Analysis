@@ -10,6 +10,10 @@ To use it, just run pipeline.py and give it the path to your video when prompted
 
 ## Code description
 
+### demo.mp4
+
+Video demonstration of what our model can do !
+
 ### classifiers_training
 
 Contains the code for our main model's architecture, as well as the training code.
